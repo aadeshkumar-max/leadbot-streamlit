@@ -34,6 +34,7 @@ if "logs" not in st.session_state: st.session_state.logs = []
 if "stats" not in st.session_state: st.session_state.stats = {"success": 0, "fail": 0, "total": 0}
 if "csv_signature" not in st.session_state: st.session_state.csv_signature = None
 if "checkpoint_loaded" not in st.session_state: st.session_state.checkpoint_loaded = False
+if "_lock" not in st.session_state: st.session_state._lock = False  # 🔒 rerun lock
 
 # ---------------- LOG ----------------
 def add_log(msg, type="info"):
@@ -53,6 +54,7 @@ with st.sidebar:
         st.session_state.logs = []
         st.session_state.running = False
         st.session_state.checkpoint_loaded = False
+        st.session_state._lock = False
         st.rerun()
 
 with st.container(border=True):
@@ -71,7 +73,7 @@ if uploaded_file:
         if os.path.exists("checkpoint.json"):
             os.remove("checkpoint.json")
 
-# ---------------- KPI PLACEHOLDERS (IMPORTANT FIX) ----------------
+# ---------------- KPI PLACEHOLDERS ----------------
 k1, k2, k3, k4 = st.columns(4)
 
 total_kpi = k1.empty()
@@ -85,8 +87,11 @@ def render_kpis():
     fail_kpi.metric("Failed ❌", st.session_state.stats["fail"])
     remaining_kpi.metric(
         "Remaining ⏳",
-        max(0, st.session_state.stats["total"] -
-            (st.session_state.stats["success"] + st.session_state.stats["fail"]))
+        max(
+            0,
+            st.session_state.stats["total"]
+            - (st.session_state.stats["success"] + st.session_state.stats["fail"])
+        )
     )
 
 render_kpis()
@@ -124,6 +129,7 @@ if start_btn and uploaded_file:
 
 if start_btn and uploaded_file and not st.session_state.running:
     st.session_state.running = True
+    st.session_state._lock = True  # 🔒 lock reruns
     add_log("Automation started.", "success")
     st.rerun()
 
@@ -160,12 +166,13 @@ if st.session_state.running and uploaded_file:
                     st.session_state.stats["fail"] += 1
                     add_log(f"Failed after 10 retries: {email}", "error")
 
-                # 🔥 KPIs + Progress LIVE EVEN AFTER STOP → START
                 render_kpis()
                 progress_bar.progress(
-                    min(1.0,
+                    min(
+                        1.0,
                         (st.session_state.stats["success"] + st.session_state.stats["fail"])
-                        / st.session_state.stats["total"])
+                        / st.session_state.stats["total"]
+                    )
                 )
 
                 bot.save_checkpoint(
@@ -180,7 +187,11 @@ if st.session_state.running and uploaded_file:
         finally:
             bot.quit()
             st.session_state.running = False
+            st.session_state._lock = False
             add_log("Automation paused or finished.", "warning")
             render_logs()
             render_kpis()
-# ===================== END =====================
+
+# ---------------- HARD STOP FOR STREAMLIT CLOUD ----------------
+if st.session_state.get("_lock"):
+    st.stop()
