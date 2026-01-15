@@ -26,13 +26,13 @@ class LeadAutomation:
     def init_driver(self):
         options = Options()
 
-        # ✅ REQUIRED: Explicit Chrome binary (Streamlit Cloud)
+        # Streamlit Cloud Chrome binary
         options.binary_location = "/usr/bin/google-chrome"
 
         if self.headless:
             options.add_argument("--headless=new")
 
-        # ✅ CRITICAL Linux flags
+        # Required Linux flags
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
@@ -40,13 +40,13 @@ class LeadAutomation:
         options.add_argument("--disable-software-rasterizer")
         options.add_argument("--window-size=1920,1080")
 
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
+        options.add_experimental_option(
+            "excludeSwitches", ["enable-logging"]
+        )
 
         try:
             self.driver = webdriver.Chrome(
-                service=Service(
-                    ChromeDriverManager(cache_valid_range=30).install()
-                ),
+                service=Service(ChromeDriverManager().install()),
                 options=options
             )
         except WebDriverException as e:
@@ -56,13 +56,15 @@ class LeadAutomation:
         self.wait = WebDriverWait(self.driver, 15)
 
     def save_checkpoint(self, index, success_count, fail_count):
-        data = {
-            "last_index": index,
-            "success_count": success_count,
-            "fail_count": fail_count
-        }
         with open(CHECKPOINT_FILE, "w") as f:
-            json.dump(data, f)
+            json.dump(
+                {
+                    "last_index": index,
+                    "success_count": success_count,
+                    "fail_count": fail_count,
+                },
+                f,
+            )
 
     def load_checkpoint(self):
         if os.path.exists(CHECKPOINT_FILE):
@@ -98,13 +100,14 @@ class LeadAutomation:
                         (By.XPATH, "//div[contains(@class,'modal-content')]")
                     )
                 )
+
                 return True
 
             except Exception:
                 retry_count += 1
                 self.log(
                     f"Connection hiccup for {email}. Attempt {retry_count}/10...",
-                    "warning"
+                    "warning",
                 )
                 time.sleep(3)
 

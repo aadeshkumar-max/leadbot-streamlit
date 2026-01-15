@@ -1,4 +1,4 @@
 streamlit
 pandas
 selenium==4.16.0
-webdriver-manager
+webdriver-manager==4.0.1
