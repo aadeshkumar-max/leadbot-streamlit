@@ -1,12 +1,15 @@
 import json
 import time
 import os
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import WebDriverException
+
 from webdriver_manager.chrome import ChromeDriverManager
 
 CHECKPOINT_FILE = "checkpoint.json"
@@ -18,27 +21,37 @@ class LeadAutomation:
         self.headless = headless
         self.driver = None
         self.wait = None
-        self.max_retries = 10  # Hardened to 10 attempts
+        self.max_retries = 10
 
     def init_driver(self):
         options = Options()
 
-        if self.headless:
-            options.add_argument("--headless=new")  # ✅ cloud-safe
+        # ✅ REQUIRED: Explicit Chrome binary (Streamlit Cloud)
+        options.binary_location = "/usr/bin/google-chrome"
 
-        # ✅ REQUIRED FOR STREAMLIT CLOUD / LINUX
+        if self.headless:
+            options.add_argument("--headless=new")
+
+        # ✅ CRITICAL Linux flags
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        options.add_argument("--disable-setuid-sandbox")
+        options.add_argument("--disable-software-rasterizer")
         options.add_argument("--window-size=1920,1080")
 
-        # Reduce noise
         options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
-        self.driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=options
-        )
+        try:
+            self.driver = webdriver.Chrome(
+                service=Service(
+                    ChromeDriverManager(cache_valid_range=30).install()
+                ),
+                options=options
+            )
+        except WebDriverException as e:
+            self.log("❌ Chrome failed to start on Streamlit Cloud", "error")
+            raise e
 
         self.wait = WebDriverWait(self.driver, 15)
 
@@ -67,17 +80,14 @@ class LeadAutomation:
             try:
                 self.driver.get(self.url)
 
-                # Email input
                 email_input = self.wait.until(
                     EC.presence_of_element_located((By.ID, "Email"))
                 )
                 email_input.clear()
                 email_input.send_keys(email)
 
-                # Register
                 self.driver.find_element(By.ID, "registerBtn").click()
 
-                # Success verification (GIBS flow)
                 click_here = self.wait.until(
                     EC.element_to_be_clickable((By.LINK_TEXT, "Click here"))
                 )
@@ -88,7 +98,6 @@ class LeadAutomation:
                         (By.XPATH, "//div[contains(@class,'modal-content')]")
                     )
                 )
-
                 return True
 
             except Exception:
